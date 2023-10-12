@@ -37,7 +37,7 @@ w1 = random.uniform(-1,1)
 w2 = random.uniform(-1,1)
 wY = random.uniform(-1,1)
 
-xY = 0
+xY = 1
 
 pred = 1
 per_sum = 0
