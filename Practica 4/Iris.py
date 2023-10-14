@@ -6,10 +6,6 @@ def BackP(csv_t, w,lr):
     n = csv_t.shape[0]
     n_con = len(w)
     
-    y = [0]*(n_con)
-    e = [0]*(n_con)
-    delta = [0]*(n_con)
-    
     for i in range(n):
         y = [0]*(n_con)
         e = [0]*(n_con)
@@ -24,8 +20,7 @@ def BackP(csv_t, w,lr):
         d[0] = csv_t.loc[i,4]
         d[1] = csv_t.loc[i,5]
         d[2] = csv_t.loc[i,6]
-   #     print(x)
-    #    print(d)
+        
         for j in range(n_con):
             if j == 0:
                 v[j]=np.dot(w[j],x)
@@ -39,7 +34,7 @@ def BackP(csv_t, w,lr):
             if k == n_con-1:
                 e[k] = d - y[k]
                 delta[k] = DerSigm(v[k])*e[k]
-                dWl = w[k]+(lr*delta[k]*y[k])
+                dWl = w[k]+(lr*delta[k]*y[k-1])
             elif k == 0:
                 e[k] = np.dot(w[k+1].T,delta[k+1])
                 delta[k] = DerRelu(v[k])*e[k]
@@ -47,16 +42,8 @@ def BackP(csv_t, w,lr):
             else:
                 e[k] = np.dot(w[k+1].T,delta[k+1])
                 delta[k] = DerRelu(v[k])*e[k]
-                dWl = w[k]+(lr*delta[k]*y[k])
+                dWl = w[k]+(lr*delta[k]*y[k-1])
             w[k] = dWl
-                
-#        for l in range(n_con):
- #           if l == 0:
-  #              dWl = w[l]+(lr*delta[l]*x.T)
-   #         else:
-    #            dWl = w[l]+(lr*delta[l]*y[l])
-            #print(dWl)
-     #       w[l] = dWl
     return w
 
 def Relu(x):
@@ -68,7 +55,6 @@ def Relu(x):
             else:
                 g[i,j] = 0
     return g
-
 
 def DerRelu(x):
     g = x.copy()
@@ -84,29 +70,30 @@ def Sigm(x):
     g = x.copy()
     for i in range(x.shape[0]):
         for j in range(x.shape[1]):
-            g[i,j] = 1 / (1 + math.exp(-x[i,j]))
+            g[i,j] = 1 / (1 + np.exp(-x[i,j]))
     return g
 
 def DerSigm(x):
     g = x.copy()
     for i in range(x.shape[0]):
         for j in range(x.shape[1]):
-            g[i,j] = math.exp(-x[i,j]) / ((1 + math.exp(-x[i,j]))**2)
+            g[i,j] = np.exp(-x[i,j]) / ((1 + np.exp(-x[i,j]))**2)
+    return g
+
+def Softmax(x):
+    x = x.copy()
+    g = np.exp(x) / np.sum(np.exp(x), axis = 0)
     return g
 
 def entr_y_prue(epoch, pesos,csv_tr,csv_ts):
-    print(csv_tr,csv_ts)
     learn_r = 0.01
     for i in range(epoch):
         pesos = BackP(csv_tr,pesos, learn_r)
-    print("Atravesado")
-#    for i in range(nt_pesos):
-#        print("peso",i,"\n",pesos[i],"\n")
-    
+    total=0
     correcto=0
+    corarray=[0]*(csv_ts[0].index.stop-csv_ts[0].index.start)
     n_con = len(pesos)
     for i in range(csv_ts[0].index.start,csv_ts[0].index.stop,1):
-        print(i)
         y = [0]*(len(pesos))
         x = np.random.rand(4,1)
         v = [0]*(n_con)
@@ -127,16 +114,21 @@ def entr_y_prue(epoch, pesos,csv_tr,csv_ts):
                 y[j]=Sigm(v[j])
             else:
                 y[j]=Relu(v[j])
-        if y[j] == 0:
+        smy=Softmax(y[j])
+        idy=np.argmax(smy)
+        idd=np.argmax(d)
+        if idy == idd:
             correcto +=1
-        
-    return correcto
+        total +=1
+        corarray[i]=smy[idy]
+    return correcto/total,corarray
+
 csv_info = pd.read_csv("irisbin.csv", header=None)
 
-capas_ocult = 4
-neuron_con = 8
-epoch = 100
-
+capas_ocult = 5
+neuron_con = 3
+epoch = 200
+print("Capas Ocultas:",capas_ocult," | Neuronas por capa oculta:",neuron_con," | Epocas:",epoch)
 if capas_ocult < 1:
     capas_ocult = 1
     
@@ -152,8 +144,8 @@ for i in range(nt_pesos):
         pesos[i] = 2 * np.random.rand(3,neuron_con) -1
     else:
         pesos[i] = 2 * np.random.rand(neuron_con,neuron_con) -1
-    print("peso",i,"\n",pesos[i],"\n")
 correcto = 0
+tcar = []
 #loo
 for i in range(csv_info.shape[0]):
     if i == 0:
@@ -171,12 +163,17 @@ for i in range(csv_info.shape[0]):
         csv_ts = pd.DataFrame(np.random.rand(1, 7))
         for j in range(csv_tss.shape[0]):
             csv_ts[j]=csv_tss[j]
-    correcto += entr_y_prue(epoch, pesos.copy(),csv_tr,csv_ts)
-    
-print("Leave One Out | Tasa de exito:",correcto/150)
+    cortol, car = entr_y_prue(epoch, pesos.copy(),csv_tr,csv_ts)
+    correcto += cortol
+    tcar += car
+print("Leave One Out")
+print("Tasa de exito:",(correcto/csv_info.shape[0])*100,"%")
+print("Desviacion Estandar:", np.std(tcar))
+print(" - - - - -")
+#kf
 correcto = 0
-#lko
 k=5
+tcar = []
 sec=math.floor(csv_info.shape[0]*(1/k))
 for i in range(k):
     if i == 0:
@@ -190,6 +187,9 @@ for i in range(k):
         csv_tr2 = csv_info.iloc[(i)*sec + sec:,:]
         csv_ts = pd.concat([csv_ts], ignore_index=True, sort=False)
         csv_tr = pd.concat([csv_tr1,csv_tr2], ignore_index=True, sort=False)
-    correcto += entr_y_prue(epoch, pesos.copy(),csv_tr,csv_ts)
-
-print("Leave K Out | Tasa de exito:",correcto/150)
+    cortol, car =  entr_y_prue(epoch, pesos.copy(),csv_tr,csv_ts)
+    correcto += cortol
+    tcar += car
+print("K-Fold")
+print("Tasa de exito:",(correcto/k)*100,"%")
+print("Desviacion Estandar:", np.std(tcar))
